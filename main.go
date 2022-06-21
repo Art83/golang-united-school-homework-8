@@ -165,6 +165,12 @@ func RemoveItem(item_num, filename string, writer io.Writer) error {
 }
 
 func Perform(args Arguments, writer io.Writer) error {
+	if args["operation"] == "" {
+		return fmt.Errorf("there's no operation flag")
+	}
+	if args["fileName"] == "" {
+		return fmt.Errorf("there's no file name")
+	}
 	if args["operation"] == "add" {
 		err := AddItem(args["item"], args["fileName"])
 		if err != nil {
