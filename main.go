@@ -16,7 +16,7 @@ type User struct {
 	Age   int    `json:"age"`
 }
 
-func AddItem(item, filename string) error {
+func AddItem(item, filename string, writer io.Writer) error {
 	var newItem User
 	err := json.Unmarshal([]byte(item), &newItem)
 	if err != nil {
@@ -39,7 +39,10 @@ func AddItem(item, filename string) error {
 		}
 		for _, val := range inFile {
 			if val.Id == newItem.Id {
-				return fmt.Errorf("such ID already exists")
+				_, err := fmt.Fprintf(writer, "Item with id %s already exists", newItem.Id)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -60,7 +63,6 @@ func AddItem(item, filename string) error {
 }
 
 func FindById(id, filename string, writer io.Writer) error {
-	fmt.Println(id)
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return err
@@ -76,7 +78,6 @@ func FindById(id, filename string, writer io.Writer) error {
 			return err
 		}
 		for _, val := range inFile {
-			fmt.Println(val.Id)
 			if val.Id == id {
 				given_Id = val
 				found = true
@@ -89,32 +90,36 @@ func FindById(id, filename string, writer io.Writer) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	ItemToReturn, err := json.Marshal(given_Id)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(writer, string(ItemToReturn))
-	if err != nil {
-		return err
+	} else {
+		ItemToReturn, err := json.Marshal(given_Id)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(writer, string(ItemToReturn))
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 
 }
 
-func ListItems(filename string) (string, error) {
+func ListItems(filename string, writer io.Writer) error {
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer file.Close()
 	inFileJson, err := io.ReadAll(file)
 	if err != nil {
-		return "", err
+		return err
 	}
 	dataFromFile := string(inFileJson)
-	return dataFromFile, nil
+	_, err = fmt.Fprintf(writer, dataFromFile)
+	if err != nil {
+		return err
+	}
+	return nil
 
 }
 
@@ -143,7 +148,7 @@ func RemoveItem(item_num, filename string, writer io.Writer) error {
 			}
 		}
 		if found == false {
-			_, err := fmt.Fprintf(writer, "Item with id %s doesn't exist", item_num)
+			_, err := fmt.Fprintf(writer, "Item with id %s not found", item_num)
 			if err != nil {
 				return err
 			}
@@ -164,31 +169,53 @@ func RemoveItem(item_num, filename string, writer io.Writer) error {
 	return nil
 }
 
+func contain_valid_method(operation string) bool {
+	operations := []string{"list", "add", "findById", "remove"}
+	for _, val := range operations {
+		if val == operation {
+			return true
+		}
+	}
+	return false
+}
+
 func Perform(args Arguments, writer io.Writer) error {
 	if args["operation"] == "" {
-		return fmt.Errorf("there's no operation flag")
+		return fmt.Errorf("-operation flag has to be specified")
 	}
 	if args["fileName"] == "" {
-		return fmt.Errorf("there's no file name")
+		return fmt.Errorf("-fileName flag has to be specified")
 	}
+	if contain_valid_method(args["operation"]) == false {
+		return fmt.Errorf("Operation %s not allowed!", args["operation"])
+	}
+
 	if args["operation"] == "add" {
-		err := AddItem(args["item"], args["fileName"])
+		if args["item"] == "" {
+			return fmt.Errorf("-item flag has to be specified")
+		}
+		err := AddItem(args["item"], args["fileName"], writer)
 		if err != nil {
 			return err
 		}
 	} else if args["operation"] == "remove" {
-		err := RemoveItem(args["item"], args["fileName"], writer)
+		if args["id"] == "" {
+			return fmt.Errorf("-id flag has to be specified")
+		}
+		err := RemoveItem(args["id"], args["fileName"], writer)
 		if err != nil {
 			return err
 		}
 	} else if args["operation"] == "list" {
-		data, err := ListItems(args["fileName"])
+		err := ListItems(args["fileName"], writer)
 		if err != nil {
 			return err
 		}
-		fmt.Println(data)
 	} else if args["operation"] == "findById" {
-		err := FindById(args["item"], args["fileName"], writer)
+		if args["id"] == "" {
+			return fmt.Errorf("-id flag has to be specified")
+		}
+		err := FindById(args["id"], args["fileName"], writer)
 		if err != nil {
 			return err
 		}
